@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title>Shooting Game</title>
+
+    <script src="/st/js/ajcomm.js"></script>
+    <script>
+        var ws = null;
+        var canvas = null;
+
+        function window_onload() {
+            canvas = Ge("main_canv");
+
+            ws = new WebSocket('ws://' + window.location.host + '/ws');
+
+            var button_send = Ge('button_send');
+            ws.onopen = function() {
+                button_send.style.display = "block";
+            };
+
+            var msg_lst = Ge("msg_list");
+            ws.onmessage = ws_onmessage;
+
+            ws.onclose = function() {
+                button_send.style.display = "none";
+            };
+        }
+
+        function ws_onmessage(event) {
+            var ctx = canvas.getContext("2d");
+            ctx.save();
+            {
+                ctx.font = "14px monospace";
+                ctx.textAlign = "center";
+                ctx.textBaseline = "middle";
+                ctx.fillColor = "#000";
+                ctx.translate(Math.random()*400+100, Math.random()*200+100);
+                ctx.rotate(Math.PI*2*Math.random());
+                ctx.fillText(event.data, 0, 0);
+            }
+            ctx.restore();
+        }
+
+        function hello_onclick() {
+            var sth = Ge('Something');
+            ws.send(sth.value);
+
+            return true;
+        }
+
+        window.onload = window_onload;
+    </script>
+</head>
+<body>
+    <canvas id="main_canv" width="600" height="400">
+
+    </canvas>
+    <p> <input type="text" id="Something"/>
+        <input type="button" style="display:none" id="button_send" onclick="return hello_onclick()" value="send"/></p>
+</body>
+</html>
