@@ -1,62 +1,152 @@
 <!doctype html>
 <html>
 <head>
-    <meta charset="utf-8" />
-    <title>Shooting Game</title>
+<meta charset="utf-8" />
+<title>Shooting Game</title>
+<script src="/st/js/ajcomm.js"></script>
+<script src="/st/shoot_game.js"></script>
+<script>
+var ws = null;
+var canvas = null;
+var login_pane = null;
+var game = null;
 
-    <script src="/st/js/ajcomm.js"></script>
-    <script>
-        var ws = null;
-        var canvas = null;
+function window_onload() {
+    login_pane = Ge('login-pane');
+    canvas = Ge("main_canv");
+    window_resize();
+}
 
-        function window_onload() {
-            canvas = Ge("main_canv");
+function window_resize() {
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
 
-            ws = new WebSocket('ws://' + window.location.host + '/ws');
+    if (game) {
+        game.resize(canvas.offsetWidth, canvas.offsetHeight);
+    }
+}
 
-            var button_send = Ge('button_send');
-            ws.onopen = function() {
-                button_send.style.display = "block";
-            };
+function on_press_submit() {
+    var username = Ge('username').value;
+    
+    ws = new WebSocket('ws://' + window.location.host + '/ws');
+    ws.onopen = function() {
+        init_game(username);
+    };
+    ws.onclose = function() {
+        exit_game();
+    };
+}
 
-            var msg_lst = Ge("msg_list");
-            ws.onmessage = ws_onmessage;
+function init_game(username) {
+    game = new ShootGame(username);
 
-            ws.onclose = function() {
-                button_send.style.display = "none";
-            };
-        }
+    ws.onmessage = function (e) {
+        game.servermessage(e.data);
+    };
 
-        function ws_onmessage(event) {
-            var ctx = canvas.getContext("2d");
-            ctx.save();
-            {
-                ctx.font = "14px monospace";
-                ctx.textAlign = "center";
-                ctx.textBaseline = "middle";
-                ctx.fillColor = "#000";
-                ctx.translate(Math.random()*400+100, Math.random()*200+100);
-                ctx.rotate(Math.PI*2*Math.random());
-                ctx.fillText(event.data, 0, 0);
-            }
-            ctx.restore();
-        }
+    login_pane.style.display = 'none';
+    document.onmousemove = function (e) {
+        game.mousemove(e.offsetX, e.offsetY);
+    }
+    document.onmousedown = function (e) { 
+        game.mousedown();
+    };
+    document.onmouseup = function (e) {
+        game.mouseup();
+    };
+    
+    document.onkeydown = function (e) {
+        game.keydown(e.keyCode);
+    };
+    document.onkeyup   = function (e) {
+        game.keyup(e.keyCode);
+    };
+    
+    game.onsendmessage = function (d) {
+        ws.send(d);
+    };
+    
+    game.resize(canvas.offsetWidth, canvas.offsetHeight);
+    game.init();
 
-        function hello_onclick() {
-            var sth = Ge('Something');
-            ws.send(sth.value);
+    var refresh = function() { 
+        game.tick();
+        game.draw(canvas);
+    };
+    setInterval(refresh, 15);
+}
 
-            return true;
-        }
+function exit_game() {
+    login_pane.style.display = 'block';
+}
 
-        window.onload = window_onload;
-    </script>
+window.onload = window_onload;
+window.onresize = window_resize;
+</script>
+<style>
+body {
+    margin: 0; padding: 0; border: 0;
+}
+
+#main_canv {
+    position: fixed;
+    width: 100%;
+    height: 100%;
+}
+
+.full {
+    position: fixed;
+    left: 0; right: 0;
+    top: 0; bottom: 0;
+}
+#login-pane {
+    background-color: rgba(127,127,127,0.8);
+    z-index: 1000;
+}
+.center-tbl {
+    position: relative;
+    display: table;
+    width:100%; height:100%;
+}
+.center-cel {
+    position: relative;
+    display: table-cell;
+    vertical-align: middle;
+    text-align: center;
+}
+#login-pane .frame {
+    position: absolute;
+    left: 0; top: 0;
+    right: 0; bottom: 0;
+    margin: 40px;
+    border-radius: 40px;
+    border: 0;
+    background-color: rgba(168,168,168,0.8);
+}
+#login-pane input {
+    border-radius:24px;
+    border: 2px solid black;
+    font-size:48px;
+    padding: 8px 16px;
+}
+</style>
 </head>
 <body>
-    <canvas id="main_canv" width="600" height="400">
+    <canvas id="main_canv" style="position" width="600" height="400">
 
     </canvas>
-    <p> <input type="text" id="Something"/>
-        <input type="button" style="display:none" id="button_send" onclick="return hello_onclick()" value="send"/></p>
+    <div id="login-pane" class="full">
+        <div class="center-tbl"><div class="center-cel">
+            <div class="frame">
+                <div class="center-tbl"><div class="center-cel">
+                    <form id="login-form" onsubmit="on_press_submit(); return false">
+                        <input id="username" type="text" name="p" />
+                        <input type="button" value="login" onclick="return on_press_submit()" />
+                    </form>
+                </div></div>
+            </div>
+        </div></div>
+    </div>
 </body>
 </html>

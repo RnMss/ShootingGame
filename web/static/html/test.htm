@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Testing</title>
+<script src="/st/js/ajcomm.js"></script>
+<script>
+function init() {
+    var canv = Ge('canv');
+    var ctx = canv.getContext('2d');
+    var mousebuttons = 0;
+    
+    document.onmousedown = function(e) {
+        mousebuttons |= (1 << e.button);
+    }
+    document.onmouseup = function(e) {
+        mousebuttons &= ~(1 << e.button);
+    }
+
+    canv.onmousemove = function(e) {
+        if (mousebuttons !== 1) return;
+        ctx.save();
+        {
+            ctx.translate(e.offsetX, e.offsetY);
+            ctx.beginPath();
+            ctx.arc(0, 0, 60, 0, Math.PI*2);
+            ctx.closePath();
+        
+            ctx.globalCompositeOperation = 'destination-out';
+            var grd = ctx.createRadialGradient(0, 0, 0, 0, 0, 60);
+            {
+                grd.addColorStop(0, 'rgba(255,0,0,0.2)');
+                grd.addColorStop(1, 'rgba(255,0,0,0.0)');
+            }
+            ctx.fillStyle = grd;
+            ctx.fill();
+        }
+        ctx.restore();
+    };
+
+    ctx.fillStyle = 'rgba(0,0,0,1)';
+    ctx.fillRect(0, 0, 600, 400);
+}
+
+window.onload = init;
+</script>
+</head>
+<body>
+    <canvas style="width:600px; height:400px; position:absolute; z-index:1;" id="canv" width="600" height="400">
+    </canvas>
+    <div style="background-color:blue; width:600px; height:400px; color: green; font-size: 96pt; position:absolute; z-index:0;">
+        这么学可不行啊！
+    </div>
+</body>
+</html>
