@@ -72,16 +72,6 @@ var ShootGame = (function() {
     var BULLET_SPEED = 8.0;
     var BULLET_LIFE = 50;
 
-
-    function VFXBlood(time, pos) {
-        this.start_time = time;
-        this.pos = pos;
-    }
-
-    VFXBlood.prototype = function () {
-        
-    }
-
     function Bullet(player) {
         this.from = player.id;
         this.id = player.bullet_id;
@@ -231,6 +221,47 @@ var ShootGame = (function() {
         return dist2d2(bullet.pos, player.pos) <= PLAYER_RADIUS * PLAYER_RADIUS;
     }
 
+    var BLOOD_TIME = 180;
+    var BLOOD_MAX_RADIUS = 40;
+    var BLOOD_FLOW_RATE = BLOOD_MAX_RADIUS*BLOOD_MAX_RADIUS / BLOOD_TIME;
+    function VFXBlood(time, pos) {
+        this.start_time = time;
+        this.pos = pos;
+    }
+
+    VFXBlood.prototype = {
+        dead: false,
+        draw: function (ctx, time) {
+            var elp_time = time - this.start_time;
+            var rad = (elp_time >= BLOOD_TIME
+                        ? BLOOD_MAX_RADIUS
+                        : Math.sqrt(BLOOD_FLOW_RATE * elp_time));
+
+            ctx.save();
+            ctx.translate(this.pos.x, this.pos.y);
+            {
+                ctx.beginPath();
+                ctx.arc(0, 0, rad, 0, PI2);
+                ctx.closePath();
+
+                ctx.fillStyle = "#711";
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+    };
+
+    function remove_dead_in_dict(d) {
+        var deadlist = [];
+        for (var k in d) {
+            if (d[k].dead) {
+                deadlist.push(k);
+            }
+        }
+        for (var i=0; i<deadlist.length; ++i) {
+            delete d[deadlist[i]];
+        }
+    }
 
     return function (myName) {
         var my_name = myName;
@@ -270,10 +301,18 @@ var ShootGame = (function() {
             }
         };
 
+
+
+
         var my_player_dead = false;
-        function player_died(pid) {
-            users[pid].dead = true;
-            if (pid == my_id) my_player_dead = true;
+        function player_died(player) {
+            player.dead = true;
+            if (player.id == my_id) my_player_dead = true;
+        }
+
+        function player_shot_by_bullet(player, bullet) {
+            player_died(player);
+            add_effect(new VFXBlood(ticks, bullet.pos));
         }
 
         function process_moves() {
@@ -282,27 +321,94 @@ var ShootGame = (function() {
             }
 
             var my_player = users[my_id];
-            var dead_bulletes = [];
             for (var bid in bullets) {
                 var bullet = bullets[bid];
                 bullet.process_move();
-                if (bullet.dead) {
-                    dead_bulletes.push(bid);
-                } else {
-                    for (var pid in users) {
-                        if (shot_test(bullet, users[pid])) {
-                            player_died(pid);
-                            dead_bulletes.push(bid);
+
+                for (var pid in users) {
+                    var player = users[pid];
+                    if (!player.dead) {
+                        if (shot_test(bullet, player)) {
+                            player_shot_by_bullet(player, bullet);
                         }
                     }
-
                 }
             }
-            for (var i=0; i<dead_bulletes.length; ++i) {
-                delete bullets[dead_bulletes[i]];
-            }
+            remove_dead_in_dict(bullets);
+
+            ticks += 1;
         }
         
+        function draw_players(ctx) {
+            for (var pid in users) {
+                var user = users[pid];
+                
+                ctx.save();
+                ctx.translate(user.pos.x, user.pos.y);
+                ctx.rotate(user.orient + RANGLE);
+                {
+                    ctx.beginPath();
+                    ctx.moveTo(0, -GUN_LENGTH);
+                    ctx.arc(0, 0, PLAYER_RADIUS, 0.2-RANGLE, PI2-RANGLE-0.2);
+                    ctx.closePath();
+
+                    ctx.fillStyle = user.dead ? "#333" : "#CCC";
+                    ctx.fill();
+
+                    ctx.strokeStyle = user.dead ? "#DDD" : "#000";
+                    ctx.lineWidth = 2.5;
+                    ctx.lineJoin = 'miter';
+                    ctx.stroke();
+
+                    ctx.font = "14px monospace";
+                    ctx.fillStyle = user.dead ? "#FFF" : "#000";
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(user.name, 0, 0);
+                }
+                ctx.restore();
+            }
+        }
+
+        function draw_bullets(ctx) {
+            for (var bid in bullets) {
+                var bullet = bullets[bid];
+
+                ctx.save();
+                ctx.translate(bullet.pos.x, bullet.pos.y);
+                //ctx.rotate(bullet.orient + RANGLE);
+                {
+                    ctx.beginPath();
+                    ctx.arc(0, 0, 4, 0, PI2);
+                    ctx.closePath();
+
+                    ctx.fillStyle = "#F22";
+                    ctx.fill();
+
+                    ctx.strokeStyle = "#800";
+                    ctx.lineWidth = 1.0;
+                    ctx.lineJoin = 'miter';
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
+        }
+
+        var effects = {};
+        var effects_autoid = 0;
+        function add_effect(vfx) {
+            effects[effects_autoid++] = vfx;
+        }
+
+        function draw_effects(ctx) {
+            for (eid in effects) {
+                var effect = effects[eid];
+                effect.draw(ctx, ticks);
+            }
+
+            remove_dead_in_dict(effects);
+        }
+
         this.draw = function(canvas) {
             var ctx = canvas.getContext("2d");
             
@@ -311,56 +417,9 @@ var ShootGame = (function() {
             ctx.save();
             ctx.translate(0.5*canvas.width, 0.5*canvas.height);
             {
-                for (var pid in users) {
-                    var user = users[pid];
-                    
-                    ctx.save();
-                    ctx.translate(user.pos.x, user.pos.y);
-                    ctx.rotate(user.orient + RANGLE);
-                    {
-                        ctx.beginPath();
-                        ctx.moveTo(0, -GUN_LENGTH);
-                        ctx.arc(0, 0, PLAYER_RADIUS, 0.2-RANGLE, PI2-RANGLE-0.2);
-                        ctx.closePath();
-
-                        ctx.fillStyle = user.dead ? "#811" : "#CCC";
-                        ctx.fill();
-
-                        ctx.strokeStyle = "#000";
-                        ctx.lineWidth = 2.5;
-                        ctx.lineJoin = 'miter';
-                        ctx.stroke();
-
-                        ctx.font = "14px monospace";
-                        ctx.fillStyle = user.dead ? "#FCC" : "#000";
-                        ctx.textAlign = 'center';
-                        ctx.textBaseline = 'middle';
-                        ctx.fillText(user.name, 0, 0);
-                    }
-                    ctx.restore();
-                }
-
-                for (var bid in bullets) {
-                    var bullet = bullets[bid];
-
-                    ctx.save();
-                    ctx.translate(bullet.pos.x, bullet.pos.y);
-                    //ctx.rotate(bullet.orient + RANGLE);
-                    {
-                        ctx.beginPath();
-                        ctx.arc(0, 0, 4, 0, PI2);
-                        ctx.closePath();
-
-                        ctx.fillStyle = "#F22";
-                        ctx.fill();
-
-                        ctx.strokeStyle = "#800";
-                        ctx.lineWidth = 1.0;
-                        ctx.lineJoin = 'miter';
-                        ctx.stroke();
-                    }
-                    ctx.restore();
-                }
+                draw_effects(ctx);
+                draw_players(ctx);
+                draw_bullets(ctx);
             }
             ctx.restore();
 
@@ -434,8 +493,6 @@ var ShootGame = (function() {
                 }
 
                 process_moves();
-
-                ticks += 1;
             }
         },
 
