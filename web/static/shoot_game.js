@@ -32,25 +32,26 @@
 //         to_pos : Point
 //       }
 
+
+/*
+user = { name: String,
+       , dest: 
+       }
+*/
+
+
+var PI = Math.PI;
+var PI2 = PI * 2;
+var RANGLE = PI / 2;
+
+
+
+
+
 function Vec2(x, y) {
     this.x = x;
     this.y = y;
 }
-
-// Vec2.prototype = {
-//     plus: function (that) {
-//         return vec2(this.x+that.x, this.y+that.y);
-//     },
-//     minus: function (that) {
-//         return vec2(this.x-that.x, this.y-that.y);
-//     },
-//     len2: function () {
-//         return this.x*this.x + this.y*this.y;
-//     },
-//     len: function() {
-//         return Math.sqrt(this.len2());
-//     },
-// };
 
 function vec2(x, y) {
     return new Vec2(x, y);
@@ -58,15 +59,184 @@ function vec2(x, y) {
 
 var ShootGame = (function() {
     var GAME_TICK_FACTOR = 6;
-    var MAX_LATENCY = 5;
+    var MIN_LATENCY = 2;
+    var MAX_LATENCY = 6;
 
     var MOVE_SPEED = 2.5;
     var MOVE_SPEED_SQR = sqr(MOVE_SPEED);
+    var ROTATE_SPEED = 8.0 / 60;
+    var ROTATE_TOLERANCE = 0.5;
+
+    var PLAYER_RADIUS = 20;
+    var GUN_LENGTH = 24;
+    var BULLET_SPEED = 8.0;
+    var BULLET_LIFE = 50;
+
+
+    function VFXBlood(time, pos) {
+        this.start_time = time;
+        this.pos = pos;
+    }
+
+    VFXBlood.prototype = function () {
+        
+    }
+
+    function Bullet(player) {
+        this.from = player.id;
+        this.id = player.bullet_id;
+        this.pos = plus2d(player.pos, scale2d(player.dest_norm, GUN_LENGTH));
+        this.orient = player.dest_angle;
+        this.velocity = scale2d(player.dest_norm, BULLET_SPEED);
+    }
+    Bullet.prototype = {
+        from: null,
+        age: 0,
+        pos: null,
+        orient: null,
+        velocity: null,
+        dead: false,
+
+        process_move: function() {
+            this.pos = plus2d(this.pos, this.velocity);
+            this.age += 1;
+            if (this.age >= BULLET_LIFE) {
+                this.dead = true;
+            }
+        }
+    };
+
+
+    function Player(name, pos) {
+        this.name = name;
+        this.pos = pos;
+    }
+
+    Player.prototype = {
+        name: null,
+
+        bullet_id: null,
+
+        pos: null,
+        
+        _orient: 0.0,
+        _orient_norm: vec2(1, 0),
+        
+        get orient() {
+            return this._orient;
+        },
+
+        set orient(v) {
+            var vv = v % PI2;
+            if (vv < 0.0) vv += PI2;
+            this._orient = vv;
+            this._orient_norm = norm_from_angle(vv);
+        },
+
+        get orient_norm() {
+            return this._orient_norm;
+        },
+
+        _dest: vec2(0, 0),
+        _dest_angle: Math.NaN,
+        _dest_norm: Math.NaN,
+
+        get dest() {
+            return this._dest;
+        },
+
+        set dest(v) {
+            this._dest = v;
+            this.refresh_dest_angle();
+        },
+
+        get dest_angle() {
+            return this._dest_angle;
+        },
+
+        get dest_norm() {
+            return this._dest_norm;
+        },
+
+        // _aim: null,
+        // _aim_angle: null,
+
+        // get aim() {
+        //     return this._aim;
+        // },
+
+        // set aim(v) {
+        //     this._aim = v;
+        //     if (v) {
+
+        //     }
+        // },
+
+        // get aim_angle() {
+        //     return this._aim_angle;
+        // },
+
+        refresh_dest_angle: function () {
+            var dv = minus2d(this._dest, this.pos);
+            var da = Math.atan2(dv.y, dv.x);
+            if (da < 0) da += PI2
+            this._dest_angle = da;
+            this._dest_norm = norm_from_angle(da);
+        },
+
+        process_move: function(bullets) {
+            if (this.dead) return;
+
+            var d2 = dist2d2(this.pos, this.dest);
+
+            if (d2 < 0.00000001) {
+                // Do nothing
+            } else if (d2 < MOVE_SPEED_SQR) {
+                this.pos = Object.create(this.dest);
+            } else {
+                var angleabs = Math.abs(this.orient - this.dest_angle);
+                if (this.bullet_id == null && angleabs < ROTATE_TOLERANCE) {
+                    this.pos = plus2d(this.pos, scale2d(this.orient_norm, MOVE_SPEED));
+                    if (angleabs > 0.0001) {
+                        this.refresh_dest_angle();
+                    }
+                }
+
+                if (angleabs < 0.0001) {
+                    if (this.bullet_id != null) {
+                        var bullet = new Bullet(this);
+                        bullets[this.bullet_id] = bullet;
+
+                        this.dest = this.pos;
+                        this.bullet_id = null;
+                    }
+                } else if(angleabs < ROTATE_SPEED) {
+                    this.orient = this.dest_angle;
+                } else {
+                    var clockwise_diff = this.dest_angle - this.orient;
+                    while (clockwise_diff < 0) {
+                        clockwise_diff += PI2;
+                    }
+                    if (clockwise_diff < PI) {
+                        this.orient += ROTATE_SPEED;
+                    } else {
+                        this.orient -= ROTATE_SPEED;
+                    }    
+                }
+            }
+        }
+    };
+
+    function shot_test(bullet, player) {
+        return dist2d2(bullet.pos, player.pos) <= PLAYER_RADIUS * PLAYER_RADIUS;
+    }
+
 
     return function (myName) {
         var my_name = myName;
         var my_id = -1;
         var users = {};
+        var bullets = {};
         var sendmessage = null;
         var msg_queue = [];
         var ui_w = 1, ui_h = 1;
@@ -74,35 +244,62 @@ var ShootGame = (function() {
         var ticks = 0;
         var mx = 0, my = 0;
         
-        var process_message = function(data) {
+        function process_message(data) {
             switch (data.type) {
                 case 'new_player': {
-                    users[data.id] = { name: data.name, pos: data.init_pos, dest_pos: vec2(0,0) };
+                    users[data.id] = new Player(data.name, data.init_pos);
                     break;
                 }
                 case 'move': {
-                    users[data.id].dest_pos = data.to_pos;
+                    var user = users[data.id];
+                    user.dest = data.to_pos;
+                    user.bullet_id = null;
                     break;
                 }
                 case 'handshake': {
                     my_id = data.id;
                     my_name = data.name;
+                    break;
+                }
+                case 'shoot': {
+                    var user = users[data.from];
+                    user.dest = data.to_pos;
+                    user.bullet_id = data.id;
+                    break;
                 }
             }
         };
 
-        var process_moves = function() {
-            for (var pid in users) {
-                var user = users[pid];
+        var my_player_dead = false;
+        function player_died(pid) {
+            users[pid].dead = true;
+            if (pid == my_id) my_player_dead = true;
+        }
 
-                var d2 = dist2d2(user.pos, user.dest_pos);
-                if (d2 < MOVE_SPEED_SQR) {
-                    user.pos = Object.create(user.dest_pos);
+        function process_moves() {
+            for (var pid in users) {
+                users[pid].process_move(bullets);
+            }
+
+            var my_player = users[my_id];
+            var dead_bulletes = [];
+            for (var bid in bullets) {
+                var bullet = bullets[bid];
+                bullet.process_move();
+                if (bullet.dead) {
+                    dead_bulletes.push(bid);
                 } else {
-                    var dir = minus2d(user.dest_pos, user.pos); 
-                    var diff = scale2d(dir, MOVE_SPEED / len2d(dir));
-                    user.pos = plus2d(user.pos, diff);
+                    for (var pid in users) {
+                        if (shot_test(bullet, users[pid])) {
+                            player_died(pid);
+                            dead_bulletes.push(bid);
+                        }
+                    }
+
                 }
+            }
+            for (var i=0; i<dead_bulletes.length; ++i) {
+                delete bullets[dead_bulletes[i]];
             }
         }
         
@@ -115,61 +312,104 @@ var ShootGame = (function() {
             ctx.translate(0.5*canvas.width, 0.5*canvas.height);
             {
                 for (var pid in users) {
-                    user = users[pid];
+                    var user = users[pid];
                     
                     ctx.save();
                     ctx.translate(user.pos.x, user.pos.y);
+                    ctx.rotate(user.orient + RANGLE);
                     {
                         ctx.beginPath();
-                        ctx.arc(0, 0, 20, 0, 6.283);
+                        ctx.moveTo(0, -GUN_LENGTH);
+                        ctx.arc(0, 0, PLAYER_RADIUS, 0.2-RANGLE, PI2-RANGLE-0.2);
                         ctx.closePath();
 
-                        ctx.fillStyle = "#CCC";
+                        ctx.fillStyle = user.dead ? "#811" : "#CCC";
                         ctx.fill();
 
-                        ctx.strokeStyle = "black";
-                        ctx.lineWidth = 1.0;
+                        ctx.strokeStyle = "#000";
+                        ctx.lineWidth = 2.5;
+                        ctx.lineJoin = 'miter';
                         ctx.stroke();
 
                         ctx.font = "14px monospace";
-                        ctx.fillStyle = 'black';
+                        ctx.fillStyle = user.dead ? "#FCC" : "#000";
                         ctx.textAlign = 'center';
                         ctx.textBaseline = 'middle';
                         ctx.fillText(user.name, 0, 0);
                     }
                     ctx.restore();
                 }
+
+                for (var bid in bullets) {
+                    var bullet = bullets[bid];
+
+                    ctx.save();
+                    ctx.translate(bullet.pos.x, bullet.pos.y);
+                    //ctx.rotate(bullet.orient + RANGLE);
+                    {
+                        ctx.beginPath();
+                        ctx.arc(0, 0, 4, 0, PI2);
+                        ctx.closePath();
+
+                        ctx.fillStyle = "#F22";
+                        ctx.fill();
+
+                        ctx.strokeStyle = "#800";
+                        ctx.lineWidth = 1.0;
+                        ctx.lineJoin = 'miter';
+                        ctx.stroke();
+                    }
+                    ctx.restore();
+                }
             }
             ctx.restore();
+
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'top';
+            ctx.fillText("buffered messages " + msg_queue.length, 20, 20);
         };
 
         this.mousemove = function (x, y) {
             mx = x; my = y;
+
+            if (keymap[18]) {
+                this.mousedown(2);
+            }
         };
 
-        this.mousedown = function () {
+        this.mousedown = function (button) {
             if (my_id == -1) return;
             
             var gx = mx - ui_w * 0.5;
             var gy = my - ui_h * 0.5;
 
-            sendmessage(JSON.stringify(
-                { type: 'move'
-                , to_pos: vec2(gx, gy)     
-                }
-            ));
+            if (button == 2) {
+                sendmessage(JSON.stringify(
+                    { type: 'move'
+                    , to_pos: vec2(gx, gy)     
+                    }
+                ));
+            } else
+            if (button == 0) {
+                sendmessage(JSON.stringify(
+                    { type: 'shoot'
+                    , to_pos: vec2(gx, gy)     
+                    }
+                ));
+            }
         };
 
-        this.mouseup = function () {
+        this.mouseup = function (button) {
         
         };
 
+        var keymap = {};
         this.keydown = function (code) {
-        
+            keymap[code] = true;
         };
 
         this.keyup = function (code) {
-        
+            keymap[code] = false;
         };
     
         this.resize = function (w, h) {
@@ -183,7 +423,7 @@ var ShootGame = (function() {
     
         this.tick = function() {
             if (msg_queue.length > 0) {
-                if (   (ticks % GAME_TICK_FACTOR == 0)
+                if (   (ticks % GAME_TICK_FACTOR == 0) 
                     || (msg_queue.length > MAX_LATENCY)
                 ) {
                     var msg = msg_queue.shift();
@@ -211,32 +451,38 @@ var ShootGame = (function() {
         };
     };
 
-    function sqr(x) {
-        return x*x;
-    }
-    function dist2d2(p, q) {
-        return sqr(p.x - q.x) + sqr(p.y - q.y);
-    }
-    function dist2d(p, q) {
-        return Math.sqrt(dist2d2(p, q));
-    }
-    function len2d2(p) {
-        return p.x * p.x + p.y * p.y;
-    }
-    function len2d(p) {
-        return Math.sqrt(len2d2(p));
-    }
-    function plus2d(p, q) {
-        return vec2(p.x + q.x, p.y + q.y);
-    }
-    function minus2d(p, q) {
-        return vec2(p.x - q.x, p.y - q.y);
-    }
-    function scale2d(p, k) {
-        return vec2(p.x * k, p.y * k);
-    }
-    function div2d(p, k) {
-        return vec2(p.x / k, p.y / k);
-    }
-
 })();
+
+function sqr(x) {
+    return x*x;
+}
+function dist2d2(p, q) {
+    return sqr(p.x - q.x) + sqr(p.y - q.y);
+}
+function dist2d(p, q) {
+    return Math.sqrt(dist2d2(p, q));
+}
+function len2d2(p) {
+    return p.x * p.x + p.y * p.y;
+}
+function len2d(p) {
+    return Math.sqrt(len2d2(p));
+}
+function plus2d(p, q) {
+    return vec2(p.x + q.x, p.y + q.y);
+}
+function minus2d(p, q) {
+    return vec2(p.x - q.x, p.y - q.y);
+}
+function scale2d(p, k) {
+    return vec2(p.x * k, p.y * k);
+}
+function div2d(p, k) {
+    return vec2(p.x / k, p.y / k);
+}
+function normalize2d(p) {
+    return scale2d(p, 1.0 / len2d(p));
+}
+function norm_from_angle(a) {
+    return vec2(Math.cos(a), Math.sin(a));
+}

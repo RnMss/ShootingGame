@@ -5,14 +5,15 @@ import tornado.ioloop
 
 from . import settings, handlers
 from . import game
+from .gamehall import GameHall
 
 def main():
-    _the_room = game.GameRoom()
-    _the_room.start()
+    hall = GameHall()
+    # _the_room.start()
 
     _handlers = (
         [ (r'/'       , handlers.common.FileHandler, {'path':settings.index_html_path})
-        , (r'/ws'     , handlers.ShootGameWSHandler, {'room':_the_room})
+        , (r'/ws'     , handlers.ShootGameWSHandler, {'hall':hall})
         , (r'/st/(.+)', tornado.web.StaticFileHandler, {'path':settings.static_path})
         ] )
 

@@ -15,6 +15,11 @@ function window_onload() {
     login_pane = Ge('login-pane');
     canvas = Ge("main_canv");
     window_resize();
+
+    document.oncontextmenu = function (e) {
+        e.preventDefault();
+        return false;
+    }
 }
 
 function window_resize() {
@@ -50,10 +55,10 @@ function init_game(username) {
         game.mousemove(e.offsetX, e.offsetY);
     }
     document.onmousedown = function (e) { 
-        game.mousedown();
+        game.mousedown(e.button);
     };
     document.onmouseup = function (e) {
-        game.mouseup();
+        game.mouseup(e.button);
     };
     
     document.onkeydown = function (e) {
@@ -67,6 +72,8 @@ function init_game(username) {
         ws.send(d);
     };
     
+    
+
     game.resize(canvas.offsetWidth, canvas.offsetHeight);
     game.init();
 
