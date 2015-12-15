@@ -27,6 +27,7 @@ class Player:
         self.name = name
         self.pid  = pid
         self.ws   = ws
+        self.ready = False
 
         self.dest = Vec2(0, 0)
         self.pos = Vec2(0, 0)

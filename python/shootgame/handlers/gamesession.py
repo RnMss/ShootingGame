@@ -40,12 +40,17 @@ class ShootGameWSHandler(tornado.websocket.WebSocketHandler):
             if self._pid:
                 self._room.shoot_bullet(self._pid, d['to_pos']['x'], d['to_pos']['y'])
 
+        def case_ready(d):
+            if self._pid:
+                self._room.player_ready(self._pid)
+
         def case_default(d):
             print("invalid message: ", message)
 
         { 'handshake': case_handshake
         , 'move'     : case_move
         , 'shoot'    : case_shoot
+        , 'ready'    : case_ready
         }.get(data['type'], case_default)(data)
 
     def send_events(self, tick, events):

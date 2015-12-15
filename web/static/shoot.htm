@@ -9,12 +9,17 @@
 var ws = null;
 var canvas = null;
 var login_pane = null;
+var ready_button = null;
 var game = null;
 
 function window_onload() {
     login_pane = Ge('login-pane');
     canvas = Ge("main_canv");
+    ready_button = Ge("ready-button");
     window_resize();
+
+    ready_button.style.display = "none";
+    ready_button.onclick = on_press_ready;
 
     document.oncontextmenu = function (e) {
         e.preventDefault();
@@ -43,6 +48,14 @@ function on_press_submit() {
     };
 }
 
+function on_press_ready(e) {
+    game.announce_ready();
+    ready_button.style.display = 'none';
+
+    e.preventDefault();
+    return true;
+}
+
 function init_game(username) {
     game = new ShootGame(username);
 
@@ -51,20 +64,22 @@ function init_game(username) {
     };
 
     login_pane.style.display = 'none';
-    document.onmousemove = function (e) {
+    ready_button.style.display = 'block';
+
+    canvas.onmousemove = function (e) {
         game.mousemove(e.offsetX, e.offsetY);
     }
-    document.onmousedown = function (e) { 
+    canvas.onmousedown = function (e) { 
         game.mousedown(e.button);
     };
-    document.onmouseup = function (e) {
+    canvas.onmouseup = function (e) {
         game.mouseup(e.button);
     };
     
-    document.onkeydown = function (e) {
+    canvas.onkeydown = function (e) {
         game.keydown(e.keyCode);
     };
-    document.onkeyup   = function (e) {
+    canvas.onkeyup   = function (e) {
         game.keyup(e.keyCode);
     };
     
@@ -137,6 +152,22 @@ body {
     font-size:48px;
     padding: 8px 16px;
 }
+
+.big-button {
+    border: 8px solid black;
+    border-radius: 20px;
+    background-color: #C80;
+    font-size: 42px;
+}
+.right-bottom-button {
+    position: fixed;
+    width: 250px;
+    height: 80px;
+    right: 40px;
+    bottom: 40px;
+
+    z-index: 1000;
+}
 </style>
 </head>
 <body>
@@ -155,5 +186,9 @@ body {
             </div>
         </div></div>
     </div>
+
+    <button id="ready-button" class="big-button right-bottom-button" type="button">
+        Ready
+    </button>
 </body>
 </html>

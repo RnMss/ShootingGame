@@ -38,6 +38,8 @@ class GameRoom:
         self._hall = hall
 
         self._users = {}
+        self._unready = 0
+
         self._auto_id = 1
         self._bullet_id = 1
         self._events = []
@@ -70,7 +72,7 @@ class GameRoom:
     def start(self):
         self._lock.acquire()
         if self._state == STATE_PREPARE:
-            self._timer = set_interval(0.1, GameRoom._tick, (self,))
+            self._timer = set_interval(0.099, GameRoom._tick, (self,))
             print("Game started between: ", [u.name for u in self._users.values()])
             self._state = STATE_RUNNING
             self._hall.next_room()
@@ -84,6 +86,8 @@ class GameRoom:
 
         pid = self._auto_id
         self._auto_id += 1
+
+        self._unready += 1
 
         init_msg = [{
             'type' : 'handshake',
@@ -124,10 +128,15 @@ class GameRoom:
 
     def remove_player(self, pid):
         self._lock.acquire()
+
+        if not self._users[pid].ready:
+            self._unready -= 1
+
         del self._users[pid]
-        if len(self._users) == 0:
+        if self._state == STATE_RUNNING and len(self._users) == 0:
             self._state = STATE_FINISHED
             self._timer.cancel()
+
         self._lock.release()
 
         if self._state == STATE_FINISHED:
@@ -144,7 +153,20 @@ class GameRoom:
         })
         self._lock.release()
 
-        self.start()
+    def player_ready(self, pid):
+        self._lock.acquire()
+
+        if not self._users[pid].ready:
+            self._users[pid].ready = True
+            self._unready -= 1
+
+        unready = self._unready
+
+        self._lock.release()
+
+        if unready == 0:
+            self.start()
+
 
     def shoot_bullet(self, from_pid, x, y):
         self._lock.acquire()

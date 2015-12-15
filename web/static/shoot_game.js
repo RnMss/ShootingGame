@@ -70,7 +70,8 @@ var ShootGame = (function() {
     var PLAYER_RADIUS = 20;
     var GUN_LENGTH = 24;
     var BULLET_SPEED = 8.0;
-    var BULLET_LIFE = 50;
+    var BULLET_LIFE = 120;
+    var BULLET_COOLDOWN = 40;
 
     function Bullet(player) {
         this.from = player.id;
@@ -106,6 +107,8 @@ var ShootGame = (function() {
         name: null,
 
         bullet_id: null,
+
+        shoot_cooldown: 0,
 
         pos: null,
         
@@ -228,7 +231,6 @@ var ShootGame = (function() {
         this.start_time = time;
         this.pos = pos;
     }
-
     VFXBlood.prototype = {
         dead: false,
         draw: function (ctx, time) {
@@ -251,6 +253,43 @@ var ShootGame = (function() {
         }
     };
 
+    var CMD_RING_MAX_RADIUS = 20;
+    var CMD_RING_TIME = 45;
+    var CMD_RING_RADIUS_RATE = CMD_RING_MAX_RADIUS / CMD_RING_TIME;
+    var CMD_RING_COLOR = ["rgba(196,0,0,0.6)", "rgba(0,128,0,0.6)"];
+    function VFXCmdRing(time, pos, type) {
+        this.start_time = time;
+        this.pos = pos;
+        this.type = type;
+    }
+    VFXCmdRing.prototype = {
+        dead: false,
+        draw: function (ctx, time) {
+            var elp_time = time - this.start_time;
+            if (elp_time > CMD_RING_TIME) {
+                this.dead = true;
+                return;
+            }
+
+            var rad = CMD_RING_RADIUS_RATE * elp_time;
+            var color = CMD_RING_COLOR[this.type];
+
+            ctx.save();
+            ctx.translate(this.pos.x, this.pos.y);
+            {
+                ctx.beginPath();
+                ctx.arc(0, 0, rad, 0, PI2);
+                ctx.closePath();
+
+                ctx.globalAlpha = 1.0 - (elp_time / CMD_RING_TIME);
+                ctx.lineWidth = 2.0;
+                ctx.strokeStyle = color;
+                ctx.stroke();
+            }
+            ctx.restore();
+        }
+    };
+
     function remove_dead_in_dict(d) {
         var deadlist = [];
         for (var k in d) {
@@ -266,6 +305,8 @@ var ShootGame = (function() {
     return function (myName) {
         var my_name = myName;
         var my_id = -1;
+        var my_player = null;
+
         var users = {};
         var bullets = {};
         var sendmessage = null;
@@ -279,6 +320,9 @@ var ShootGame = (function() {
             switch (data.type) {
                 case 'new_player': {
                     users[data.id] = new Player(data.name, data.init_pos);
+                    if (data.id == my_id) {
+                        my_player = users[data.id];
+                    }
                     break;
                 }
                 case 'move': {
@@ -294,8 +338,12 @@ var ShootGame = (function() {
                 }
                 case 'shoot': {
                     var user = users[data.from];
-                    user.dest = data.to_pos;
-                    user.bullet_id = data.id;
+                    if (ticks >= user.shoot_cooldown) {
+                        user.dest = data.to_pos;
+                        user.bullet_id = data.id;
+
+                        user.shoot_cooldown = ticks + BULLET_COOLDOWN;
+                    }
                     break;
                 }
             }
@@ -320,7 +368,6 @@ var ShootGame = (function() {
                 users[pid].process_move(bullets);
             }
 
-            var my_player = users[my_id];
             for (var bid in bullets) {
                 var bullet = bullets[bid];
                 bullet.process_move();
@@ -365,6 +412,17 @@ var ShootGame = (function() {
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.fillText(user.name, 0, 0);
+
+
+                    var shoot_cd = user.shoot_cooldown - ticks;
+                    if (shoot_cd > 0) {
+                        ctx.beginPath();
+                        ctx.arc(0, 0, GUN_LENGTH*2-PLAYER_RADIUS, 0, shoot_cd/BULLET_COOLDOWN*PI2, false);
+                        
+                        ctx.strokeStyle = "#555";
+                        ctx.lineWidth = 4.0;
+                        ctx.stroke();
+                    }
                 }
                 ctx.restore();
             }
@@ -409,23 +467,73 @@ var ShootGame = (function() {
             remove_dead_in_dict(effects);
         }
 
+
+        var map = {};
+        
+        var GRID_WIDTH = 100;
+
+        function draw_map(ctx) {
+            ctx.save();
+
+            var left = my_player.pos.x - ui_w * 0.5;
+            var right = my_player.pos.x + ui_w * 0.5;
+            var top = my_player.pos.y - ui_h * 0.5;
+            var bottom = my_player.pos.y + ui_h * 0.5;
+
+            ctx.lineWidth = 3.0;
+            ctx.strokeStyle = "#FC8";
+
+            for (
+                var x = Math.ceil(left / GRID_WIDTH) * GRID_WIDTH;
+                x < right;
+                x += GRID_WIDTH
+            ) {
+                ctx.beginPath();
+                ctx.moveTo(x, top);
+                ctx.lineTo(x, bottom);
+
+                ctx.stroke();
+            }
+
+            for (
+                var y = Math.ceil(top / GRID_WIDTH) * GRID_WIDTH;
+                y < bottom;
+                y += GRID_WIDTH
+            ) {
+                ctx.beginPath();
+                ctx.moveTo(left, y);
+                ctx.lineTo(right, y);
+
+                ctx.stroke();
+            }
+
+            ctx.restore();
+        }
+
+
         this.draw = function(canvas) {
             var ctx = canvas.getContext("2d");
             
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            ctx.save();
-            ctx.translate(0.5*canvas.width, 0.5*canvas.height);
-            {
-                draw_effects(ctx);
-                draw_players(ctx);
-                draw_bullets(ctx);
-            }
-            ctx.restore();
+            if (my_player) {
+                ctx.save();
+                ctx.translate(
+                    0.5*canvas.width - my_player.pos.x,
+                    0.5*canvas.height - my_player.pos.y
+                );
+                {
+                    draw_map(ctx);
+                    draw_effects(ctx);
+                    draw_players(ctx);
+                    draw_bullets(ctx);
+                }
+                ctx.restore();
 
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'top';
-            ctx.fillText("buffered messages " + msg_queue.length, 20, 20);
+                ctx.textAlign = 'left';
+                ctx.textBaseline = 'top';
+                ctx.fillText("buffered messages " + msg_queue.length, 20, 20);
+            }
         };
 
         this.mousemove = function (x, y) {
@@ -439,22 +547,28 @@ var ShootGame = (function() {
         this.mousedown = function (button) {
             if (my_id == -1) return;
             
-            var gx = mx - ui_w * 0.5;
-            var gy = my - ui_h * 0.5;
+            var pos = my_player ? my_player.pos : vec2(0, 0);
+            var gx = mx - ui_w * 0.5 + pos.x;
+            var gy = my - ui_h * 0.5 + pos.y;
+            var pos = vec2(gx, gy);
 
             if (button == 2) {
                 sendmessage(JSON.stringify(
                     { type: 'move'
-                    , to_pos: vec2(gx, gy)     
+                    , to_pos: pos
                     }
                 ));
+
+                add_effect(new VFXCmdRing(ticks, pos, 1));
             } else
             if (button == 0) {
                 sendmessage(JSON.stringify(
                     { type: 'shoot'
-                    , to_pos: vec2(gx, gy)     
+                    , to_pos: pos     
                     }
                 ));
+
+                add_effect(new VFXCmdRing(ticks, pos, 0));
             }
         };
 
@@ -478,7 +592,7 @@ var ShootGame = (function() {
         this.servermessage = function (json) {
             var msg = JSON.parse(json);
             msg_queue.push(msg);
-        },
+        };
     
         this.tick = function() {
             if (msg_queue.length > 0) {
@@ -494,7 +608,13 @@ var ShootGame = (function() {
 
                 process_moves();
             }
-        },
+        };
+
+        this.announce_ready = function() {
+            sendmessage(JSON.stringify({
+                type: 'ready'
+            }));
+        }
 
         this.__defineSetter__('onsendmessage', function (f) {
             sendmessage = f;
