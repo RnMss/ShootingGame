@@ -1,3 +1,5 @@
+"use strict";
+
 // ServerMessage = {
 //     time   : Int,
 //     events : Event[]
@@ -44,8 +46,75 @@ var PI = Math.PI;
 var PI2 = PI * 2;
 var RANGLE = PI / 2;
 
+var FULL_ANGLE = 3600;
+var FLAT_ANGLE = 1800;
+var RIGHT_ANGLE = 900;
 
+// 用定点数代替浮点数，保证不同机器没有误差
+// 这样就服务器就不用写游戏逻辑了哈哈哈哈哈
+var PRECISION = 10000;
 
+// 0.0°至90.0°的正弦（乘以PRECISION）
+var DEGREE_SIN = new Int32Array([
+0,17,34,52,69,87,104,122,139,157,174,191,209,226,244,261,279,296,314,331,348,366,383,401,418,436,453,471,488,505,523,540,558,575,593,610,627,645,662,680,697,714,732,749,767,784,801,819,836,854,
+871,888,906,923,941,958,975,993,1010,1027,1045,1062,1079,1097,1114,1132,1149,1166,1184,1201,1218,1236,1253,1270,1287,1305,1322,1339,1357,1374,1391,1409,1426,1443,1460,1478,1495,1512,1529,1547,1564,1581,1598,1616,1633,1650,1667,1684,1702,1719,
+1736,1753,1770,1788,1805,1822,1839,1856,1873,1890,1908,1925,1942,1959,1976,1993,2010,2027,2044,2062,2079,2096,2113,2130,2147,2164,2181,2198,2215,2232,2249,2266,2283,2300,2317,2334,2351,2368,2385,2402,2419,2436,2453,2469,2486,2503,2520,2537,2554,2571,
+2588,2605,2621,2638,2655,2672,2689,2706,2722,2739,2756,2773,2789,2806,2823,2840,2856,2873,2890,2907,2923,2940,2957,2973,2990,3007,3023,3040,3056,3073,3090,3106,3123,3139,3156,3173,3189,3206,3222,3239,3255,3272,3288,3305,3321,3338,3354,3370,3387,3403,
+3420,3436,3452,3469,3485,3502,3518,3534,3551,3567,3583,3599,3616,3632,3648,3665,3681,3697,3713,3729,3746,3762,3778,3794,3810,3826,3842,3859,3875,3891,3907,3923,3939,3955,3971,3987,4003,4019,4035,4051,4067,4083,4099,4115,4131,4146,4162,4178,4194,4210,
+4226,4241,4257,4273,4289,4305,4320,4336,4352,4368,4383,4399,4415,4430,4446,4461,4477,4493,4508,4524,4539,4555,4570,4586,4601,4617,4632,4648,4663,4679,4694,4710,4725,4740,4756,4771,4786,4802,4817,4832,4848,4863,4878,4893,4909,4924,4939,4954,4969,4984,
+4999,5015,5030,5045,5060,5075,5090,5105,5120,5135,5150,5165,5180,5195,5210,5224,5239,5254,5269,5284,5299,5313,5328,5343,5358,5372,5387,5402,5417,5431,5446,5461,5475,5490,5504,5519,5533,5548,5562,5577,5591,5606,5620,5635,5649,5664,5678,5692,5707,5721,
+5735,5750,5764,5778,5792,5807,5821,5835,5849,5863,5877,5891,5906,5920,5934,5948,5962,5976,5990,6004,6018,6032,6045,6059,6073,6087,6101,6115,6129,6142,6156,6170,6184,6197,6211,6225,6238,6252,6266,6279,6293,6306,6320,6333,6347,6360,6374,6387,6401,6414,
+6427,6441,6454,6467,6481,6494,6507,6520,6534,6547,6560,6573,6586,6600,6613,6626,6639,6652,6665,6678,6691,6704,6717,6730,6743,6755,6768,6781,6794,6807,6819,6832,6845,6858,6870,6883,6896,6908,6921,6934,6946,6959,6971,6984,6996,7009,7021,7033,7046,7058,
+7071,7083,7095,7107,7120,7132,7144,7156,7169,7181,7193,7205,7217,7229,7241,7253,7265,7277,7289,7301,7313,7325,7337,7349,7360,7372,7384,7396,7408,7419,7431,7443,7454,7466,7477,7489,7501,7512,7524,7535,7547,7558,7569,7581,7592,7604,7615,7626,7637,7649,
+7660,7671,7682,7693,7705,7716,7727,7738,7749,7760,7771,7782,7793,7804,7815,7826,7836,7847,7858,7869,7880,7890,7901,7912,7922,7933,7944,7954,7965,7975,7986,7996,8007,8017,8028,8038,8048,8059,8069,8079,8090,8100,8110,8120,8131,8141,8151,8161,8171,8181,
+8191,8201,8211,8221,8231,8241,8251,8260,8270,8280,8290,8300,8309,8319,8329,8338,8348,8358,8367,8377,8386,8396,8405,8415,8424,8433,8443,8452,8461,8471,8480,8489,8498,8508,8517,8526,8535,8544,8553,8562,8571,8580,8589,8598,8607,8616,8625,8633,8642,8651,
+8660,8668,8677,8686,8694,8703,8712,8720,8729,8737,8746,8754,8763,8771,8779,8788,8796,8804,8813,8821,8829,8837,8845,8853,8862,8870,8878,8886,8894,8902,8910,8917,8925,8933,8941,8949,8957,8964,8972,8980,8987,8995,9003,9010,9018,9025,9033,9040,9048,9055,
+9063,9070,9077,9085,9092,9099,9106,9114,9121,9128,9135,9142,9149,9156,9163,9170,9177,9184,9191,9198,9205,9211,9218,9225,9232,9238,9245,9252,9258,9265,9271,9278,9284,9291,9297,9304,9310,9316,9323,9329,9335,9342,9348,9354,9360,9366,9372,9378,9384,9390,
+9396,9402,9408,9414,9420,9426,9432,9438,9443,9449,9455,9460,9466,9472,9477,9483,9488,9494,9499,9505,9510,9515,9521,9526,9531,9537,9542,9547,9552,9557,9563,9568,9573,9578,9583,9588,9593,9598,9602,9607,9612,9617,9622,9626,9631,9636,9640,9645,9650,9654,
+9659,9663,9668,9672,9677,9681,9685,9690,9694,9698,9702,9707,9711,9715,9719,9723,9727,9731,9735,9739,9743,9747,9751,9755,9759,9762,9766,9770,9774,9777,9781,9785,9788,9792,9795,9799,9802,9806,9809,9812,9816,9819,9822,9826,9829,9832,9835,9838,9841,9845,
+9848,9851,9854,9857,9859,9862,9865,9868,9871,9874,9876,9879,9882,9884,9887,9890,9892,9895,9897,9900,9902,9905,9907,9909,9912,9914,9916,9918,9921,9923,9925,9927,9929,9931,9933,9935,9937,9939,9941,9943,9945,9947,9948,9950,9952,9953,9955,9957,9958,9960,
+9961,9963,9964,9966,9967,9969,9970,9971,9973,9974,9975,9976,9978,9979,9980,9981,9982,9983,9984,9985,9986,9987,9988,9988,9989,9990,9991,9991,9992,9993,9993,9994,9995,9995,9996,9996,9997,9997,9997,9998,9998,9998,9999,9999,9999,9999,9999,9999,9999,9999,
+10000]);
+
+var DEG_RAD = 1800 / PI, RAD_DEG = PI / 1800;
+
+function sin(deg) {
+    if (deg < 0) return -sin(deg);
+    
+    deg %= 3600;
+    return (
+        deg <= 1800
+            ? deg <= 900
+                ? DEGREE_SIN[deg]
+                : DEGREE_SIN[1800-deg]
+            : deg <= 2700
+                ? -DEGREE_SIN[deg-1800]
+                : -DEGREE_SIN[3600-deg]
+    );
+}
+
+function cos(deg) {
+    if (deg < 0) deg = -deg;
+    deg %= 3600;
+
+    return (
+        deg <= 1800
+            ? deg <= 900
+                ? DEGREE_SIN[900-deg]
+                : -DEGREE_SIN[deg-900]
+            : deg <= 2700
+                ? -DEGREE_SIN[2700-deg]
+                : DEGREE_SIN[deg-2700]
+    );        
+}
+
+// 太麻烦不想写，暂时偷懒
+// 姑且认为atan2的能精确到0.1°
+function atan2(y, x) {
+    var d = Math.floor(Math.atan2(y, x) * DEG_RAD);
+    if (d < 0) d += FULL_ANGLE;
+    return d;
+}
 
 
 function Vec2(x, y) {
@@ -57,28 +126,71 @@ function vec2(x, y) {
     return new Vec2(x, y);
 }
 
+// This is a stub
+var GameWorld = (function () {
+
+    var MAX_WIDTH = 40;
+    var MAX_HEIGTH = 40;
+
+    return function(array) {
+
+        var width = MAX_WIDTH;
+        var height = MAX_HEIGTH;
+
+        var blocks = new Int8Array(array);
+
+        function get_block(x, y) {
+            return blocks[y * width + x];
+        }
+        this.get_block = get_block;
+
+        this.block_from_point = function (x, y) {
+            return get_block(
+                Math.floor(x / this.block_width),
+                Math.floor(y / this.block_width)
+            );
+        }
+
+        function set_block(x, y, b) {
+            blocks[y * width + x] = b;
+        }
+        this.set_block = set_block;
+
+        this.block_width = 100 * PRECISION;
+
+        Object.defineProperty(this, 'width' , { value: width  });
+        Object.defineProperty(this, 'height', { value: height });
+
+    };
+
+})();
+
+
 var ShootGame = (function() {
     var GAME_TICK_FACTOR = 6;
     var MIN_LATENCY = 2;
     var MAX_LATENCY = 6;
 
-    var MOVE_SPEED = 2.5;
-    var MOVE_SPEED_SQR = sqr(MOVE_SPEED);
-    var ROTATE_SPEED = 8.0 / 60;
-    var ROTATE_TOLERANCE = 0.5;
+    var MOVE_SPEED = 2.5 *PRECISION>>0;    // 玩家移速，单位是 [1e-4 px / frame]
+    var MOVE_SPEED_SQR = sqr(MOVE_SPEED);  // 玩家移速的平方 [1e-8 px^2 / frame^2]
+    
+    
+    var ROTATE_SPEED = 75;       // 单位是 [0.1° / frame]
+    var ROTATE_TOLERANCE = 280;  // 目标点与玩家面向夹角小于这个值就开始移动了（不然走弧线动作很愣）
+                                 //  [0.1°]
 
-    var PLAYER_RADIUS = 20;
-    var GUN_LENGTH = 24;
-    var BULLET_SPEED = 8.0;
-    var BULLET_LIFE = 120;
-    var BULLET_COOLDOWN = 40;
+    var PLAYER_RADIUS = 20.0 *PRECISION>>0;  // 玩家单位的半径 [ 1e-4 px ]
+    var GUN_LENGTH = 24.0 *PRECISION>>0;     // 从玩家中心到枪口的长度 [1e-4 px]
+    var BULLET_SPEED = 8 *PRECISION>>0;      // 子弹的移速 [ 1e-4px / frame ]
+    var BULLET_LIFE = 60;                    // 子弹的寿命（和射程成正比） [ frame ]
+    var BULLET_COOLDOWN = 40;                // 开枪冷却 [ frame ]
 
     function Bullet(player) {
         this.from = player.id;
         this.id = player.bullet_id;
-        this.pos = plus2d(player.pos, scale2d(player.dest_norm, GUN_LENGTH));
+        this.pos = plus2d(player.pos, scale2dP(player.dest_norm, GUN_LENGTH));
         this.orient = player.dest_angle;
-        this.velocity = scale2d(player.dest_norm, BULLET_SPEED);
+        this.velocity = scale2dP(player.dest_norm, BULLET_SPEED);
     }
     Bullet.prototype = {
         from: null,
@@ -87,15 +199,8 @@ var ShootGame = (function() {
         orient: null,
         velocity: null,
         dead: false,
-
-        process_move: function() {
-            this.pos = plus2d(this.pos, this.velocity);
-            this.age += 1;
-            if (this.age >= BULLET_LIFE) {
-                this.dead = true;
-            }
-        }
     };
+
 
 
     function Player(name, pos) {
@@ -112,18 +217,18 @@ var ShootGame = (function() {
 
         pos: null,
         
-        _orient: 0.0,
-        _orient_norm: vec2(1, 0),
-        
-        get orient() {
-            return this._orient;
-        },
+        _orient: 0,
+        _orient_norm: vec2(1*PRECISION, 0*PRECISION),
 
         set orient(v) {
-            var vv = v % PI2;
-            if (vv < 0.0) vv += PI2;
+            var vv = v % FULL_ANGLE;
+            if (vv < 0.0) vv += FULL_ANGLE;
             this._orient = vv;
             this._orient_norm = norm_from_angle(vv);
+        },
+
+        get orient() {
+            return this._orient;
         },
 
         get orient_norm() {
@@ -151,81 +256,20 @@ var ShootGame = (function() {
             return this._dest_norm;
         },
 
-        // _aim: null,
-        // _aim_angle: null,
-
-        // get aim() {
-        //     return this._aim;
-        // },
-
-        // set aim(v) {
-        //     this._aim = v;
-        //     if (v) {
-
-        //     }
-        // },
-
-        // get aim_angle() {
-        //     return this._aim_angle;
-        // },
-
         refresh_dest_angle: function () {
             var dv = minus2d(this._dest, this.pos);
-            var da = Math.atan2(dv.y, dv.x);
-            if (da < 0) da += PI2
+            var da = atan2(dv.y, dv.x);
             this._dest_angle = da;
             this._dest_norm = norm_from_angle(da);
-        },
-
-        process_move: function(bullets) {
-            if (this.dead) return;
-
-            var d2 = dist2d2(this.pos, this.dest);
-
-            if (d2 < 0.00000001) {
-                // Do nothing
-            } else if (d2 < MOVE_SPEED_SQR) {
-                this.pos = Object.create(this.dest);
-            } else {
-                var angleabs = Math.abs(this.orient - this.dest_angle);
-                if (this.bullet_id == null && angleabs < ROTATE_TOLERANCE) {
-                    this.pos = plus2d(this.pos, scale2d(this.orient_norm, MOVE_SPEED));
-                    if (angleabs > 0.0001) {
-                        this.refresh_dest_angle();
-                    }
-                }
-
-                if (angleabs < 0.0001) {
-                    if (this.bullet_id != null) {
-                        var bullet = new Bullet(this);
-                        bullets[this.bullet_id] = bullet;
-
-                        this.dest = this.pos;
-                        this.bullet_id = null;
-                    }
-                } else if(angleabs < ROTATE_SPEED) {
-                    this.orient = this.dest_angle;
-                } else {
-                    var clockwise_diff = this.dest_angle - this.orient;
-                    while (clockwise_diff < 0) {
-                        clockwise_diff += PI2;
-                    }
-                    if (clockwise_diff < PI) {
-                        this.orient += ROTATE_SPEED;
-                    } else {
-                        this.orient -= ROTATE_SPEED;
-                    }    
-                }
-            }
-        }
+        } 
     };
 
     function shot_test(bullet, player) {
         return dist2d2(bullet.pos, player.pos) <= PLAYER_RADIUS * PLAYER_RADIUS;
     }
 
-    var BLOOD_TIME = 180;
-    var BLOOD_MAX_RADIUS = 40;
+    var BLOOD_TIME = 180;       // 流血持续时间
+    var BLOOD_MAX_RADIUS = 40;  // 单位 [ px ]
     var BLOOD_FLOW_RATE = BLOOD_MAX_RADIUS*BLOOD_MAX_RADIUS / BLOOD_TIME;
     function VFXBlood(time, pos) {
         this.start_time = time;
@@ -237,10 +281,10 @@ var ShootGame = (function() {
             var elp_time = time - this.start_time;
             var rad = (elp_time >= BLOOD_TIME
                         ? BLOOD_MAX_RADIUS
-                        : Math.sqrt(BLOOD_FLOW_RATE * elp_time));
+                        : Math.sqrt(BLOOD_FLOW_RATE * elp_time)); // 血泊的面积和时间成正比
 
             ctx.save();
-            ctx.translate(this.pos.x, this.pos.y);
+            ctx.translate(this.pos.x / PRECISION, this.pos.y / PRECISION);
             {
                 ctx.beginPath();
                 ctx.arc(0, 0, rad, 0, PI2);
@@ -253,8 +297,8 @@ var ShootGame = (function() {
         }
     };
 
-    var CMD_RING_MAX_RADIUS = 20;
-    var CMD_RING_TIME = 45;
+    var CMD_RING_MAX_RADIUS = 20;  // 鼠标命令地上的圈的最后半径 [ px ]
+    var CMD_RING_TIME = 45;        // [ frame ]
     var CMD_RING_RADIUS_RATE = CMD_RING_MAX_RADIUS / CMD_RING_TIME;
     var CMD_RING_COLOR = ["rgba(196,0,0,0.6)", "rgba(0,128,0,0.6)"];
     function VFXCmdRing(time, pos, type) {
@@ -263,6 +307,9 @@ var ShootGame = (function() {
         this.type = type;
     }
     VFXCmdRing.prototype = {
+        start_time: null,
+        pos: null,
+        type: null,
         dead: false,
         draw: function (ctx, time) {
             var elp_time = time - this.start_time;
@@ -275,7 +322,7 @@ var ShootGame = (function() {
             var color = CMD_RING_COLOR[this.type];
 
             ctx.save();
-            ctx.translate(this.pos.x, this.pos.y);
+            ctx.translate(this.pos.x / PRECISION, this.pos.y / PRECISION);
             {
                 ctx.beginPath();
                 ctx.arc(0, 0, rad, 0, PI2);
@@ -290,6 +337,43 @@ var ShootGame = (function() {
         }
     };
 
+    var BULLET_DEATH_SPARKS = 6;
+    var BULLET_DEATH_SPARK_ANGLE = PI2 / BULLET_DEATH_SPARKS;
+    var BULLET_DEATH_TIME = 12;
+    var BULLET_DEATH_RADIUS = 10;
+    var BULLET_DEATH_SPARK_LEN = 4;
+    function VFXBulletDeath(time, pos) {
+        this.start_time = time;
+        this.pos = pos;
+    }
+    VFXBulletDeath.prototype = {
+        start_time: null,
+        pos: null,
+        dead: false,
+        draw: function (ctx, time) {
+            var elp_time = time - this.start_time;
+            if (elp_time > BULLET_DEATH_TIME) {
+                this.dead = true;
+            } else {
+                ctx.save();
+                ctx.translate(this.pos.x / PRECISION, this.pos.y / PRECISION);
+                ctx.strokeStyle = "#C11";
+                ctx.lineWidth = 1;
+                for (var i=0; i<BULLET_DEATH_SPARKS; ++i) {
+                    ctx.beginPath();
+                    var rad0 = elp_time / BULLET_DEATH_TIME * BULLET_DEATH_RADIUS;
+                    ctx.moveTo(rad0, 0);
+                    ctx.lineTo(rad0 + BULLET_DEATH_SPARK_LEN, 0);
+                    ctx.stroke();
+
+                    ctx.rotate(BULLET_DEATH_SPARK_ANGLE);
+                }
+                ctx.restore();
+            }
+        }
+    }
+
+
     function remove_dead_in_dict(d) {
         var deadlist = [];
         for (var k in d) {
@@ -301,6 +385,8 @@ var ShootGame = (function() {
             delete d[deadlist[i]];
         }
     }
+
+
 
     return function (myName) {
         var my_name = myName;
@@ -315,11 +401,16 @@ var ShootGame = (function() {
         //var gametime = 0;
         var ticks = 0;
         var mx = 0, my = 0;
+
+        var world = null;
         
         function process_message(data) {
             switch (data.type) {
                 case 'new_player': {
-                    users[data.id] = new Player(data.name, data.init_pos);
+                    var px = data.init_pos.x * world.block_width + world.block_width / 2;
+                    var py = data.init_pos.y * world.block_width + world.block_width / 2;
+                    
+                    users[data.id] = new Player(data.name, vec2(px, py));
                     if (data.id == my_id) {
                         my_player = users[data.id];
                     }
@@ -334,6 +425,7 @@ var ShootGame = (function() {
                 case 'handshake': {
                     my_id = data.id;
                     my_name = data.name;
+                    world = new GameWorld(data.world);
                     break;
                 }
                 case 'shoot': {
@@ -341,16 +433,11 @@ var ShootGame = (function() {
                     if (ticks >= user.shoot_cooldown) {
                         user.dest = data.to_pos;
                         user.bullet_id = data.id;
-
-                        user.shoot_cooldown = ticks + BULLET_COOLDOWN;
                     }
                     break;
                 }
             }
         };
-
-
-
 
         var my_player_dead = false;
         function player_died(player) {
@@ -363,14 +450,121 @@ var ShootGame = (function() {
             add_effect(new VFXBlood(ticks, bullet.pos));
         }
 
+        function adjust_player_pos(u) {
+            var result = false;
+            var BW = world.block_width;
+
+            // if (pos + [d]) collides a block, align it to the wall of [n+current].
+            function adj_side(dx, dy, nx, ny) {
+                var bx = Math.floor((u.pos.x + dx) / BW);
+                var by = Math.floor((u.pos.y + dy) / BW);
+                if (world.get_block(bx, by) == 1) {
+                    u.pos = vec2(nx == null ? u.pos.x : (bx+nx)*BW - dx,
+                                 ny == null ? u.pos.y : (by+ny)*BW - dy);
+                    result = true;
+                }
+            }
+
+            adj_side(-PLAYER_RADIUS,              0,    1, null);
+            adj_side( PLAYER_RADIUS,              0,    0, null);
+            adj_side(             0, -PLAYER_RADIUS, null,    1);
+            adj_side(             0,  PLAYER_RADIUS, null,    0);
+
+            function adj_corner(dx, dy, nx, ny) {
+                var bx = Math.floor((u.pos.x + dx) / BW);
+                var by = Math.floor((u.pos.y + dy) / BW);
+
+                if (world.get_block(bx, by) == 1) {
+                    var corner = vec2((bx+nx)*BW, (by+ny)*BW);
+                    var delta = minus2d(u.pos, corner);
+                    var d_len2 = len2d2(delta);
+                    if (d_len2 < PLAYER_RADIUS * PLAYER_RADIUS) {
+                        var d_len = Math.sqrt(d_len2) >>0;
+                        u.pos = plus2d(corner, scale2d(delta, PLAYER_RADIUS / d_len));
+                        result = true;
+                    }
+                }
+            }
+            
+            adj_corner(-PLAYER_RADIUS, -PLAYER_RADIUS, 1, 1);
+            adj_corner(-PLAYER_RADIUS,  PLAYER_RADIUS, 1, 0);
+            adj_corner( PLAYER_RADIUS, -PLAYER_RADIUS, 0, 1);
+            adj_corner( PLAYER_RADIUS,  PLAYER_RADIUS, 0, 0);
+
+            return result;
+        }
+
+        function process_player_move(player) {
+
+            if (player.dead) return;
+
+            var d2 = dist2d2(player.pos, player.dest);
+
+            if (d2 == 0) {
+                // Do nothing
+            } else if (d2 < MOVE_SPEED_SQR) {
+                player.pos = Object.create(player.dest);
+            } else {
+                var angleabs = Math.abs(player.orient - player.dest_angle);
+                if (angleabs > FLAT_ANGLE) angleabs = FULL_ANGLE - angleabs;
+
+                if (player.bullet_id == null && angleabs <= ROTATE_TOLERANCE) {
+                    player.pos = plus2d(player.pos, scale2dP(player.orient_norm, MOVE_SPEED));
+                    var adjusted = adjust_player_pos(player);
+                    if (adjusted || angleabs > 0) {
+                        player.refresh_dest_angle();
+                    }
+                }
+
+                if (angleabs == 0) {
+                    if (player.bullet_id != null) {
+                        var bullet = new Bullet(player);
+                        bullets[player.bullet_id] = bullet;
+
+                        player.dest = player.pos;
+                        player.bullet_id = null;
+
+                        player.shoot_cooldown = ticks + BULLET_COOLDOWN;
+                    }
+                } else if(angleabs < ROTATE_SPEED) {
+                    player.orient = player.dest_angle;
+                } else {
+                    var clockwise_diff = player.dest_angle - player.orient;
+                    if (clockwise_diff < 0) {
+                        clockwise_diff += FULL_ANGLE;
+                    }
+                    if (clockwise_diff < FLAT_ANGLE) {
+                        player.orient += ROTATE_SPEED;
+                    } else {
+                        player.orient -= ROTATE_SPEED;
+                    }    
+                }
+            }
+        }
+
+        function process_bullet_move(bullet) {
+            bullet.pos = plus2d(bullet.pos, bullet.velocity);
+            bullet.age += 1;
+            if (bullet.age < BULLET_LIFE) {
+                var x = Math.floor(bullet.pos.x / world.block_width);
+                var y = Math.floor(bullet.pos.y / world.block_width);
+                if (world.get_block(x, y) == 0) {
+                    return;
+                }
+            }
+
+            bullet.dead = true;
+            add_effect(new VFXBulletDeath(ticks, bullet.pos));
+        }
+
         function process_moves() {
             for (var pid in users) {
-                users[pid].process_move(bullets);
+                process_player_move(users[pid]);
             }
 
             for (var bid in bullets) {
                 var bullet = bullets[bid];
-                bullet.process_move();
+                process_bullet_move(bullet);
 
                 for (var pid in users) {
                     var player = users[pid];
@@ -391,12 +585,12 @@ var ShootGame = (function() {
                 var user = users[pid];
                 
                 ctx.save();
-                ctx.translate(user.pos.x, user.pos.y);
-                ctx.rotate(user.orient + RANGLE);
+                ctx.translate(user.pos.x / PRECISION, user.pos.y / PRECISION);
+                ctx.rotate(user.orient * RAD_DEG + RANGLE);
                 {
                     ctx.beginPath();
-                    ctx.moveTo(0, -GUN_LENGTH);
-                    ctx.arc(0, 0, PLAYER_RADIUS, 0.2-RANGLE, PI2-RANGLE-0.2);
+                    ctx.moveTo(0, -GUN_LENGTH / PRECISION);
+                    ctx.arc(0, 0, PLAYER_RADIUS / PRECISION, 0.2-RANGLE, PI2-RANGLE-0.2);
                     ctx.closePath();
 
                     ctx.fillStyle = user.dead ? "#333" : "#CCC";
@@ -417,7 +611,7 @@ var ShootGame = (function() {
                     var shoot_cd = user.shoot_cooldown - ticks;
                     if (shoot_cd > 0) {
                         ctx.beginPath();
-                        ctx.arc(0, 0, GUN_LENGTH*2-PLAYER_RADIUS, 0, shoot_cd/BULLET_COOLDOWN*PI2, false);
+                        ctx.arc(0, 0, (GUN_LENGTH*2-PLAYER_RADIUS) / PRECISION, 0, shoot_cd/BULLET_COOLDOWN*PI2, false);
                         
                         ctx.strokeStyle = "#555";
                         ctx.lineWidth = 4.0;
@@ -433,7 +627,7 @@ var ShootGame = (function() {
                 var bullet = bullets[bid];
 
                 ctx.save();
-                ctx.translate(bullet.pos.x, bullet.pos.y);
+                ctx.translate(bullet.pos.x / PRECISION, bullet.pos.y / PRECISION);
                 //ctx.rotate(bullet.orient + RANGLE);
                 {
                     ctx.beginPath();
@@ -459,7 +653,7 @@ var ShootGame = (function() {
         }
 
         function draw_effects(ctx) {
-            for (eid in effects) {
+            for (var eid in effects) {
                 var effect = effects[eid];
                 effect.draw(ctx, ticks);
             }
@@ -475,37 +669,38 @@ var ShootGame = (function() {
         function draw_map(ctx) {
             ctx.save();
 
-            var left = my_player.pos.x - ui_w * 0.5;
-            var right = my_player.pos.x + ui_w * 0.5;
-            var top = my_player.pos.y - ui_h * 0.5;
-            var bottom = my_player.pos.y + ui_h * 0.5;
+            var BW = world.block_width;
 
-            ctx.lineWidth = 3.0;
+            var x0 = Math.floor((my_player.pos.x - ui_w * 0.5 * PRECISION) / BW);
+            var x1 =  Math.ceil((my_player.pos.x + ui_w * 0.5 * PRECISION) / BW);
+            var y0 = Math.floor((my_player.pos.y - ui_h * 0.5 * PRECISION) / BW);            
+            var y1 =  Math.ceil((my_player.pos.y + ui_h * 0.5 * PRECISION) / BW);
+
+            if (x0 < 0) x0 = 0;
+            if (x1 > world.width) x1 = world.width;
+            if (y0 < 0) y0 = 0;
+            if (y1 > world.height) y1 = world.height;
+            
+            ctx.beginPath();
+
+            for (var y = y0; y < y1; ++y) {
+                for (var x = x0; x < x1; ++x) {
+                    var b = world.get_block(x, y);
+                    if (b == 1) {
+                        var px0 = x * BW, px1 = px0 + BW;
+                        var py0 = y * BW, py1 = py0 + BW;
+                        ctx.rect(px0/PRECISION + 6, py0/PRECISION + 6, BW/PRECISION - 12, BW/PRECISION - 12);
+                    }
+                }
+            }
+
+            ctx.fillStyle = "#FC8";
+            ctx.fill();
+
+            ctx.lineWidth = 10;
+            ctx.lineJoin = 'round';
             ctx.strokeStyle = "#FC8";
-
-            for (
-                var x = Math.ceil(left / GRID_WIDTH) * GRID_WIDTH;
-                x < right;
-                x += GRID_WIDTH
-            ) {
-                ctx.beginPath();
-                ctx.moveTo(x, top);
-                ctx.lineTo(x, bottom);
-
-                ctx.stroke();
-            }
-
-            for (
-                var y = Math.ceil(top / GRID_WIDTH) * GRID_WIDTH;
-                y < bottom;
-                y += GRID_WIDTH
-            ) {
-                ctx.beginPath();
-                ctx.moveTo(left, y);
-                ctx.lineTo(right, y);
-
-                ctx.stroke();
-            }
+            ctx.stroke();
 
             ctx.restore();
         }
@@ -519,8 +714,8 @@ var ShootGame = (function() {
             if (my_player) {
                 ctx.save();
                 ctx.translate(
-                    0.5*canvas.width - my_player.pos.x,
-                    0.5*canvas.height - my_player.pos.y
+                    0.5*canvas.width - my_player.pos.x / PRECISION,
+                    0.5*canvas.height - my_player.pos.y / PRECISION
                 );
                 {
                     draw_map(ctx);
@@ -548,8 +743,8 @@ var ShootGame = (function() {
             if (my_id == -1) return;
             
             var pos = my_player ? my_player.pos : vec2(0, 0);
-            var gx = mx - ui_w * 0.5 + pos.x;
-            var gy = my - ui_h * 0.5 + pos.y;
+            var gx = ((mx - ui_w * 0.5) *PRECISION>>0) + pos.x;
+            var gy = ((my - ui_h * 0.5) *PRECISION>>0) + pos.y;
             var pos = vec2(gx, gy);
 
             if (button == 2) {
@@ -637,13 +832,13 @@ function dist2d2(p, q) {
     return sqr(p.x - q.x) + sqr(p.y - q.y);
 }
 function dist2d(p, q) {
-    return Math.sqrt(dist2d2(p, q));
+    return Math.sqrt(dist2d2(p, q)) >>0;
 }
 function len2d2(p) {
     return p.x * p.x + p.y * p.y;
 }
 function len2d(p) {
-    return Math.sqrt(len2d2(p));
+    return Math.sqrt(len2d2(p)) >>0;
 }
 function plus2d(p, q) {
     return vec2(p.x + q.x, p.y + q.y);
@@ -652,14 +847,24 @@ function minus2d(p, q) {
     return vec2(p.x - q.x, p.y - q.y);
 }
 function scale2d(p, k) {
-    return vec2(p.x * k, p.y * k);
+    return vec2(p.x * k >>0, p.y * k >>0);
+}
+function scale2dP(p, k) {
+    return vec2(p.x * k / PRECISION>>0, p.y * k /PRECISION>>0);
 }
 function div2d(p, k) {
-    return vec2(p.x / k, p.y / k);
+    return vec2(p.x / k >>0, p.y / k >>0);
+}
+function scaleTo2d(p, len) {
+    return scale2d(p, len / len2d(p)>>0);
 }
 function normalize2d(p) {
-    return scale2d(p, 1.0 / len2d(p));
+    return scale2d(p, PRECISION / len2d(p)>>0);
 }
+function is_clockwise(p, q) {
+    return q.y * p.x - p.y * q.x > 0;
+}
+
 function norm_from_angle(a) {
-    return vec2(Math.cos(a), Math.sin(a));
+    return vec2(cos(a), sin(a));
 }

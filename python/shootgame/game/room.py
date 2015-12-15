@@ -2,6 +2,7 @@ import threading
 import sched
 import time
 from .player import Player, Vec2
+from . import world
 import math
 
 
@@ -39,6 +40,8 @@ class GameRoom:
 
         self._users = {}
         self._unready = 0
+
+        self._world = world.World()
 
         self._auto_id = 1
         self._bullet_id = 1
@@ -93,6 +96,7 @@ class GameRoom:
             'type' : 'handshake',
             'name' : name,
             'id'   : pid,
+            'world': self._world.data(),
             'time' : 0
         }]
         for p, player in self._users.items():
@@ -110,13 +114,14 @@ class GameRoom:
                 }
             ]
 
-        self._users[pid] = Player(ws, name, pid)
+        player = Player(ws, name, pid, self._world.new_spawn_point())
+        self._users[pid] = player
 
         self._events.append({
             'type' : 'new_player',
             'id'   : pid,
             'name' : name,
-            'init_pos' : { 'x': 0, 'y': 0 }
+            'init_pos' : { 'x': player.pos.x, 'y': player.pos.y }
         })
 
         ws.send_events(self._ticks, init_msg)

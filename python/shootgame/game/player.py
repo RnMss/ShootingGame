@@ -1,4 +1,5 @@
 import math
+from random import randint
 
 
 class Vec2:
@@ -23,11 +24,11 @@ class Vec2:
 
 
 class Player:
-    def __init__(self, ws, name, pid):
+    def __init__(self, ws, name, pid, pos):
         self.name = name
         self.pid  = pid
         self.ws   = ws
         self.ready = False
 
-        self.dest = Vec2(0, 0)
-        self.pos = Vec2(0, 0)
+        self.pos = pos
+        self.dest = pos
