@@ -101,6 +101,7 @@ function init_game(username) {
 
 function exit_game() {
     login_pane.style.display = 'block';
+    ready_button.style.display = 'none';
 }
 
 window.onload = window_onload;
@@ -171,7 +172,7 @@ body {
 </style>
 </head>
 <body>
-    <canvas id="main_canv" style="position" width="600" height="400">
+    <canvas id="main_canv" style="" width="600" height="400">
 
     </canvas>
     <div id="login-pane" class="full">

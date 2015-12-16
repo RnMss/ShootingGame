@@ -181,7 +181,7 @@ var ShootGame = (function() {
 
     var PLAYER_RADIUS = 20.0 *PRECISION>>0;  // 玩家单位的半径 [ 1e-4 px ]
     var GUN_LENGTH = 24.0 *PRECISION>>0;     // 从玩家中心到枪口的长度 [1e-4 px]
-    var BULLET_SPEED = 8 *PRECISION>>0;      // 子弹的移速 [ 1e-4px / frame ]
+    var BULLET_SPEED = 9 *PRECISION>>0;      // 子弹的移速 [ 1e-4px / frame ]
     var BULLET_LIFE = 60;                    // 子弹的寿命（和射程成正比） [ frame ]
     var BULLET_COOLDOWN = 40;                // 开枪冷却 [ frame ]
 
@@ -281,15 +281,26 @@ var ShootGame = (function() {
         this.spread = spread || BLOOD_TIME;
         this.radius = radius || BLOOD_MAX_RADIUS;
         this.flow_rate = this.radius*this.radius/this.spread;
-        this.duration = Number.Infinity;
+        this.duration = duration || null;
     }
     VFXBlood.prototype = {
         dead: false,
         draw: function (ctx, time) {
             var elp_time = time - this.start_time;
-            var rad = (elp_time >= this.spread
+            var time_over = elp_time - this.spread;
+            var rad = ((time_over > 0)
                         ? this.radius
                         : Math.sqrt(this.flow_rate * elp_time)); // 血泊的面积和时间成正比
+
+            var alpha = 1.0;
+            if (this.duration && time_over > 0) {
+                if (time_over > this.duration) {
+                    this.dead = true;
+                    return;
+                } else {
+                    alpha = 1.0 - time_over/ this.duration;
+                }
+            }
 
             ctx.save();
             ctx.translate(this.pos.x / PRECISION, this.pos.y / PRECISION);
@@ -298,6 +309,7 @@ var ShootGame = (function() {
                 ctx.arc(0, 0, rad, 0, PI2);
                 ctx.closePath();
 
+                ctx.globalAlpha = alpha;
                 ctx.fillStyle = "#711";
                 ctx.fill();
             }
@@ -362,6 +374,7 @@ var ShootGame = (function() {
             var elp_time = time - this.start_time;
             if (elp_time > BULLET_DEATH_TIME) {
                 this.dead = true;
+                return;
             } else {
                 ctx.save();
                 ctx.translate(this.pos.x / PRECISION, this.pos.y / PRECISION);
@@ -380,6 +393,36 @@ var ShootGame = (function() {
             }
         }
     }
+
+    var TEXT_FLOAT_SPEED = 0.8 * PRECISION>>0;
+    function VFXFloatingText(start_time, pos, text, color, size, duration) {
+
+        var pos = pos;
+        this.dead = false;
+
+        this.draw = function (ctx, time) {
+            var elp_time = time - start_time;
+            if (elp_time > duration) {
+                this.dead = true;
+                return;
+            } else {
+                ctx.save();
+
+                ctx.translate(pos.x / PRECISION, (pos.y - elp_time * TEXT_FLOAT_SPEED) / PRECISION);
+                ctx.globalAlpha = 1.0 - elp_time / duration;
+
+                ctx.font = size + " monospace";
+                ctx.fillStyle = color;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+
+                ctx.fillText(text, 0, 0);
+
+                ctx.restore();
+            }
+        }
+    }
+
 
 
     function remove_dead_in_dict(d) {
@@ -465,11 +508,15 @@ var ShootGame = (function() {
         }
 
         function player_shot_by_bullet(player, bullet) {
+            bullet.dead = true;
+
             if (--player.health <= 0) {
                 player_died(player);
-                add_effect(new VFXBlood(ticks, bullet.pos));
+                add_effect(new VFXBlood(ticks, bullet.pos), 0);
             } else {
-                add_effect(new VFXBlood(ticks, bullet.pos));
+                var text_pos = plus2d(player.pos, vec2(0, -PLAYER_RADIUS*1.4));
+                add_effect(new VFXFloatingText(ticks, text_pos, "-1", "red", "24px", 240), 2);
+                add_effect(new VFXBlood(ticks, bullet.pos, 20, 8, 240), 0);
             }
         }
 
@@ -577,7 +624,7 @@ var ShootGame = (function() {
             }
 
             bullet.dead = true;
-            add_effect(new VFXBulletDeath(ticks, bullet.pos));
+            add_effect(new VFXBulletDeath(ticks, bullet.pos), 1);
         }
 
         function process_moves() {
@@ -591,7 +638,7 @@ var ShootGame = (function() {
 
                 for (var pid in users) {
                     var player = users[pid];
-                    if (!player.dead) {
+                    if (!player.dead && !bullet.dead) {
                         if (shot_test(bullet, player)) {
                             player_shot_by_bullet(player, bullet);
                         }
@@ -675,19 +722,20 @@ var ShootGame = (function() {
             }
         }
 
-        var effects = {};
+        var effects = [{}, {}, {}];
         var effects_autoid = 0;
-        function add_effect(vfx) {
-            effects[effects_autoid++] = vfx;
+        function add_effect(vfx, n) {
+            effects[n || 0][effects_autoid++] = vfx;
         }
 
-        function draw_effects(ctx) {
-            for (var eid in effects) {
-                var effect = effects[eid];
+        function draw_effects(ctx, n) {
+            var effs = effects[n];
+            for (var eid in effs) {
+                var effect = effs[eid];
                 effect.draw(ctx, ticks);
             }
 
-            remove_dead_in_dict(effects);
+            remove_dead_in_dict(effs);
         }
 
 
@@ -756,6 +804,26 @@ var ShootGame = (function() {
             ctx.restore();
         }
 
+        function draw_hud(ctx) {
+            ctx.save();
+
+            ctx.font = "24px monospace";
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'bottom';
+
+            var s = "";
+            for (var i=0; i<my_player.health; ++i) s += "♥";
+
+            ctx.fillStyle = "red";
+            ctx.fillText(s, 20, ui_h - 20);
+
+            ctx.strokeStyle = "black";
+            ctx.lineWidth = 1;
+            ctx.strokeText(s, 20, ui_h - 20);
+            
+            ctx.restore();
+        }
+
 
         this.draw = function(canvas) {
             var ctx = canvas.getContext("2d");
@@ -769,14 +837,18 @@ var ShootGame = (function() {
                     0.5*canvas.height - my_player.pos.y / PRECISION
                 );
                 {
-                    draw_effects(ctx);
+                    draw_effects(ctx, 0);
                     draw_map(ctx);
+                    draw_effects(ctx, 1);
                     draw_players(ctx);
                     draw_bullets(ctx);
+                    draw_effects(ctx, 2);
                 }
                 ctx.restore();
 
                 draw_debug(ctx);
+
+                draw_hud(ctx);
             } else {
                 ctx.save();
 
@@ -824,7 +896,7 @@ var ShootGame = (function() {
                     }
                 ));
 
-                add_effect(new VFXCmdRing(ticks, pos, 1));
+                add_effect(new VFXCmdRing(ticks, pos, 1), 2);
             } else
             if (button == 0) {
                 sendmessage(JSON.stringify(
@@ -833,7 +905,7 @@ var ShootGame = (function() {
                     }
                 ));
 
-                add_effect(new VFXCmdRing(ticks, pos, 0));
+                add_effect(new VFXCmdRing(ticks, pos, 0), 2);
             }
         };
 
