@@ -156,7 +156,7 @@ var GameWorld = (function () {
         }
         this.set_block = set_block;
 
-        this.block_width = 100 * PRECISION;
+        this.block_width = 40 * PRECISION;
 
         Object.defineProperty(this, 'width' , { value: width  });
         Object.defineProperty(this, 'height', { value: height });
@@ -206,6 +206,7 @@ var ShootGame = (function() {
     function Player(name, pos) {
         this.name = name;
         this.pos = pos;
+        this._dest = pos;
     }
 
     Player.prototype = {
@@ -216,6 +217,9 @@ var ShootGame = (function() {
         shoot_cooldown: 0,
 
         pos: null,
+
+        health: 10,
+        dead: true,
         
         _orient: 0,
         _orient_norm: vec2(1*PRECISION, 0*PRECISION),
@@ -236,8 +240,8 @@ var ShootGame = (function() {
         },
 
         _dest: vec2(0, 0),
-        _dest_angle: Math.NaN,
-        _dest_norm: Math.NaN,
+        _dest_angle: Number.NaN,
+        _dest_norm: Number.NaN,
 
         get dest() {
             return this._dest;
@@ -271,17 +275,21 @@ var ShootGame = (function() {
     var BLOOD_TIME = 180;       // 流血持续时间
     var BLOOD_MAX_RADIUS = 40;  // 单位 [ px ]
     var BLOOD_FLOW_RATE = BLOOD_MAX_RADIUS*BLOOD_MAX_RADIUS / BLOOD_TIME;
-    function VFXBlood(time, pos) {
+    function VFXBlood(time, pos, spread, radius, duration) {
         this.start_time = time;
         this.pos = pos;
+        this.spread = spread || BLOOD_TIME;
+        this.radius = radius || BLOOD_MAX_RADIUS;
+        this.flow_rate = this.radius*this.radius/this.spread;
+        this.duration = Number.Infinity;
     }
     VFXBlood.prototype = {
         dead: false,
         draw: function (ctx, time) {
             var elp_time = time - this.start_time;
-            var rad = (elp_time >= BLOOD_TIME
-                        ? BLOOD_MAX_RADIUS
-                        : Math.sqrt(BLOOD_FLOW_RATE * elp_time)); // 血泊的面积和时间成正比
+            var rad = (elp_time >= this.spread
+                        ? this.radius
+                        : Math.sqrt(this.flow_rate * elp_time)); // 血泊的面积和时间成正比
 
             ctx.save();
             ctx.translate(this.pos.x / PRECISION, this.pos.y / PRECISION);
@@ -403,6 +411,8 @@ var ShootGame = (function() {
         var mx = 0, my = 0;
 
         var world = null;
+
+        var game_state = false;
         
         function process_message(data) {
             switch (data.type) {
@@ -414,6 +424,10 @@ var ShootGame = (function() {
                     if (data.id == my_id) {
                         my_player = users[data.id];
                     }
+                    break;
+                }
+                case 'remove_player': {
+                    delete users[data.id];
                     break;
                 }
                 case 'move': {
@@ -436,7 +450,12 @@ var ShootGame = (function() {
                     }
                     break;
                 }
+                case 'ready': {
+                    users[data.id].dead = false;
+                    break;
+                }
             }
+
         };
 
         var my_player_dead = false;
@@ -446,8 +465,12 @@ var ShootGame = (function() {
         }
 
         function player_shot_by_bullet(player, bullet) {
-            player_died(player);
-            add_effect(new VFXBlood(ticks, bullet.pos));
+            if (--player.health <= 0) {
+                player_died(player);
+                add_effect(new VFXBlood(ticks, bullet.pos));
+            } else {
+                add_effect(new VFXBlood(ticks, bullet.pos));
+            }
         }
 
         function adjust_player_pos(u) {
@@ -580,6 +603,36 @@ var ShootGame = (function() {
             ticks += 1;
         }
         
+        function draw_person(ctx, name, dead) {
+            ctx.beginPath();
+            ctx.moveTo(0, -GUN_LENGTH / PRECISION);
+            ctx.arc(0, 0, PLAYER_RADIUS / PRECISION, 0.2-RANGLE, PI2-RANGLE-0.2);
+            ctx.closePath();
+
+            ctx.fillStyle = dead ? "#333" : "#CCC";
+            ctx.fill();
+
+            ctx.strokeStyle = dead ? "#DDD" : "#000";
+            ctx.lineWidth = 2.5;
+            ctx.lineJoin = 'miter';
+            ctx.stroke();
+
+            ctx.font = "14px monospace";
+            ctx.fillStyle = dead ? "#FFF" : "#000";
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(name, 0, 0);
+        }
+
+        function draw_cooldown(ctx, percent) {
+            ctx.beginPath();
+            ctx.arc(0, 0, (GUN_LENGTH*2-PLAYER_RADIUS) / PRECISION, 0, percent*PI2, false);
+            
+            ctx.strokeStyle = "#555";
+            ctx.lineWidth = 4.0;
+            ctx.stroke();
+        }
+
         function draw_players(ctx) {
             for (var pid in users) {
                 var user = users[pid];
@@ -588,34 +641,10 @@ var ShootGame = (function() {
                 ctx.translate(user.pos.x / PRECISION, user.pos.y / PRECISION);
                 ctx.rotate(user.orient * RAD_DEG + RANGLE);
                 {
-                    ctx.beginPath();
-                    ctx.moveTo(0, -GUN_LENGTH / PRECISION);
-                    ctx.arc(0, 0, PLAYER_RADIUS / PRECISION, 0.2-RANGLE, PI2-RANGLE-0.2);
-                    ctx.closePath();
-
-                    ctx.fillStyle = user.dead ? "#333" : "#CCC";
-                    ctx.fill();
-
-                    ctx.strokeStyle = user.dead ? "#DDD" : "#000";
-                    ctx.lineWidth = 2.5;
-                    ctx.lineJoin = 'miter';
-                    ctx.stroke();
-
-                    ctx.font = "14px monospace";
-                    ctx.fillStyle = user.dead ? "#FFF" : "#000";
-                    ctx.textAlign = 'center';
-                    ctx.textBaseline = 'middle';
-                    ctx.fillText(user.name, 0, 0);
-
-
+                    draw_person(ctx, user.name, user.dead);
                     var shoot_cd = user.shoot_cooldown - ticks;
                     if (shoot_cd > 0) {
-                        ctx.beginPath();
-                        ctx.arc(0, 0, (GUN_LENGTH*2-PLAYER_RADIUS) / PRECISION, 0, shoot_cd/BULLET_COOLDOWN*PI2, false);
-                        
-                        ctx.strokeStyle = "#555";
-                        ctx.lineWidth = 4.0;
-                        ctx.stroke();
+                        draw_cooldown(ctx, shoot_cd/BULLET_COOLDOWN);
                     }
                 }
                 ctx.restore();
@@ -705,29 +734,70 @@ var ShootGame = (function() {
             ctx.restore();
         }
 
+        function draw_debug(ctx) {
+            ctx.save();
+
+            ctx.font = "11px monospace";
+            ctx.textAlign = 'left';
+            ctx.textBaseline = 'middle';
+            ctx.fillText("Stalled: ", 20, 30);
+
+            var ML = 60;
+            var w = msg_queue.length;
+            var r = Math.floor(w / ML * 255), g = 255 - r;
+
+            if (w > ML) { 
+                ctx.fillStyle = 'red'; 
+            } else {
+                ctx.fillStyle = "rgba("+r+","+g+",0,1)";
+            }
+            ctx.fillRect(80, 25, w, 10);
+
+            ctx.restore();
+        }
+
 
         this.draw = function(canvas) {
             var ctx = canvas.getContext("2d");
             
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            if (my_player) {
+            if (game_state) {
                 ctx.save();
                 ctx.translate(
                     0.5*canvas.width - my_player.pos.x / PRECISION,
                     0.5*canvas.height - my_player.pos.y / PRECISION
                 );
                 {
-                    draw_map(ctx);
                     draw_effects(ctx);
+                    draw_map(ctx);
                     draw_players(ctx);
                     draw_bullets(ctx);
                 }
                 ctx.restore();
 
-                ctx.textAlign = 'left';
-                ctx.textBaseline = 'top';
-                ctx.fillText("buffered messages " + msg_queue.length, 20, 20);
+                draw_debug(ctx);
+            } else {
+                ctx.save();
+
+                var x = 0, y = 0;
+                var pad = 40, spc = 100;
+                var w = ui_w - pad*2 - spc, h = ui_h - pad*2 - spc;
+                for (var pid in users) {
+                    var user = users[pid];
+
+                    ctx.save();
+                    ctx.translate(x + spc*0.5 + pad, y + spc*0.5 + pad);
+
+                    draw_person(ctx, user.name, user.dead);
+                    ctx.restore();
+
+                    x += spc; if (x > w) {
+                        x = 0; y += spc;
+                    }
+                }
+
+                ctx.restore();
             }
         };
 
@@ -786,22 +856,35 @@ var ShootGame = (function() {
 
         this.servermessage = function (json) {
             var msg = JSON.parse(json);
-            msg_queue.push(msg);
+            if (msg.time == -1) {
+                var events = msg.events;
+                for (var i=0; i<events.length; ++i) {
+                    process_message(events[i]);
+                }
+            } else {
+                game_state = true;
+                msg_queue.push(msg);
+            }
         };
     
         this.tick = function() {
+            var catch_up = 4;
             if (msg_queue.length > 0) {
-                if (   (ticks % GAME_TICK_FACTOR == 0) 
-                    || (msg_queue.length > MAX_LATENCY)
-                ) {
-                    var msg = msg_queue.shift();
-                    var events = msg.events;
-                    for (var i=0; i<events.length; ++i) {
-                        process_message(events[i]);
-                    }
-                }
 
-                process_moves();
+                do {
+                    if ( (ticks % GAME_TICK_FACTOR == 0) 
+                    ) {
+                        var msg = msg_queue.shift();
+                        var events = msg.events;
+                        for (var i=0; i<events.length; ++i) {
+                            process_message(events[i]);
+                        }
+                    }
+
+                    process_moves();
+
+                    catch_up -= 1;
+                } while (msg_queue.length > MAX_LATENCY && catch_up > 0);
             }
         };
 

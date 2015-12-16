@@ -92,7 +92,9 @@ class GameRoom:
 
         self._unready += 1
 
-        init_msg = [{
+        new_player = Player(ws, name, pid, self._world.new_spawn_point())
+
+        old_player_msg = [{
             'type' : 'handshake',
             'name' : name,
             'id'   : pid,
@@ -100,31 +102,34 @@ class GameRoom:
             'time' : 0
         }]
         for p, player in self._users.items():
-            init_msg += [
-                {
+            old_player_msg.append({
                 'type' : 'new_player',
                 'id'   : p,
                 'name' : player.name,
                 'init_pos' : { 'x': player.pos.x, 'y': player.pos.y }
-                },
-                {
-                'type' : 'move',
-                'id'   : p,
-                'to_pos' : { 'x': player.dest.x, 'y': player.dest.y }
-                }
-            ]
+            })
 
-        player = Player(ws, name, pid, self._world.new_spawn_point())
-        self._users[pid] = player
+            if player.ready:
+                old_player_msg.append({
+                    'type': 'ready',
+                    'id': p
+                })
 
-        self._events.append({
+        new_player_msg = {
             'type' : 'new_player',
             'id'   : pid,
             'name' : name,
-            'init_pos' : { 'x': player.pos.x, 'y': player.pos.y }
-        })
+            'init_pos' : { 'x': new_player.pos.x, 'y': new_player.pos.y }
+        }
 
-        ws.send_events(self._ticks, init_msg)
+        old_player_msg.append(new_player_msg)
+
+        ws.send_events(-1, old_player_msg)
+
+        for user in self._users.values():
+            user.ws.send_events(-1, [new_player_msg])
+
+        self._users[pid] = new_player
 
         self._lock.release()
 
@@ -141,6 +146,13 @@ class GameRoom:
         if self._state == STATE_RUNNING and len(self._users) == 0:
             self._state = STATE_FINISHED
             self._timer.cancel()
+
+        remove_player_msg = {
+            'type': 'remove_player',
+            'id': pid
+        }
+        for user in self._users.values():
+            user.ws.send_events(-1, [remove_player_msg])
 
         self._lock.release()
 
@@ -166,6 +178,14 @@ class GameRoom:
             self._unready -= 1
 
         unready = self._unready
+
+        ready_msg = {
+            'type': 'ready',
+            'id' : pid
+        }
+
+        for user in self._users.values():
+            user.ws.send_events(-1, [ready_msg])
 
         self._lock.release()
 
