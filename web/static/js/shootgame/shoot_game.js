@@ -956,7 +956,7 @@ var ShootGame = (function() {
                     process_moves();
 
                     catch_up -= 1;
-                } while (msg_queue.length > MAX_LATENCY && catch_up > 0);
+                } while (msg_queue.length > 1 && catch_up > 0);
             }
         };
 
