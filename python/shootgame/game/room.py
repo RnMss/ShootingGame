@@ -205,6 +205,15 @@ class GameRoom:
         })
         self._lock.release()
 
+    def plant_timebomb(self, from_pid):
+        self._lock.acquire()
+        self._events.append({
+            'type' : 'plant_timebomb',
+            'from' : from_pid
+        })
+        self._lock.release()
+
+
     GAME_TICK_FACTOR = 6
     MOVE_SPEED = 2.5 * GAME_TICK_FACTOR
     MOVE_SPEED_SQR = MOVE_SPEED * MOVE_SPEED

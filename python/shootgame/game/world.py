@@ -11,11 +11,14 @@ class World:
         size = self.width * self.height
 
         def gen_blk(x, y):
-            if x==0 or x==self.width-1 or y==0 or y==self.height-1:
+            if x==0 or x==self.width-1:
                 return 1
 
+            if y==0 or y==self.height-1:
+                return 2
+
             if uniform(0, 1) < 0.2:
-                return 1
+                return randint(1,4)
             else:
                 return 0
 
