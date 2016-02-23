@@ -24,4 +24,4 @@ python3 launch.py
 
 play: browse http://localhost:8888/
 
-ask your friend to join
+invite your friend to play through LAN
